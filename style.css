@@ -1,16 +1,21 @@
 *{
-    
+   padding: auto;
+   margin: auto; 
 }
 .cabecera {
     margin: 20px;
     padding: 10px;
+    
 }
 .img-baner{
-    position: center;
+    height: 50%;
+    width: 50%;
+    
 }
 .img-perfil{
-    height: 400px;
-    width: 500px;
+    margin-top: 10px;
+    height: 50%;
+    width: 50%;
 }
 .mydescipcion{
     text-align: center;
