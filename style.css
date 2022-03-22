@@ -1,0 +1,26 @@
+*{
+    
+}
+.cabecera {
+    margin: 20px;
+    padding: 10px;
+}
+.img-baner{
+    position: center;
+}
+.img-perfil{
+    height: 400px;
+    width: 500px;
+}
+.mydescipcion{
+    text-align: center;
+    color: darkblue;
+    text-decoration: underline;
+}
+.exp-laboral{
+    text-shadow: 2px 2px rgb(133, 28, 28);
+    font-size: 30px;
+}
+.cursos{
+    font-size: 25px;
+}
