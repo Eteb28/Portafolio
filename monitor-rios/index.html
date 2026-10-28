@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px system-ui,-apple-system,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Monitor Paraná y Uruguay</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* ============================================================================
+   PLAN DE DISEÑO
+   Layout: tablero hidrometeorológico — franja de estado arriba, mapa-instrumento
+           a la izquierda y contexto a la derecha, proyección y estaciones debajo.
+   Color : neutros slate con sesgo azul; acento cian-agua; escala semántica de
+           crecida (azul→verde→ámbar→naranja→rojo) usada en mapa y chips.
+   Tipos : Archivo (títulos) · IBM Plex Sans (texto/UI) · IBM Plex Mono (datos).
+   ========================================================================== */
+
+:root{
+  /* --- Neutros y superficies (tema claro por defecto) --- */
+  --bg:#eef2f6;
+  --surface:#ffffff;
+  --surface-2:#f4f7fa;
+  --surface-3:#e7edf3;
+  --border:#d4dde6;
+  --border-strong:#bcc9d6;
+  --fg:#10202f;
+  --fg-muted:#53667a;
+  --fg-faint:#8498aa;
+
+  /* --- Acento --- */
+  --accent:#0e8ba0;
+  --accent-strong:#0a6a7a;
+  --accent-soft:#d6eef2;
+
+  /* --- Escala semántica de nivel / crecida --- */
+  --lvl-low:#2b6cb0;
+  --lvl-ok:#199b86;
+  --lvl-warn:#c99400;
+  --lvl-high:#d9701f;
+  --lvl-crit:#cf2f45;
+
+  /* --- Mapa: tinta de agua fija (igual en ambos temas) --- */
+  --map-ink:#0b1a2a;
+  --map-ink-2:#0f2538;
+  --map-land:#13293b;
+  --map-grid:rgba(255,255,255,.06);
+  --map-label:rgba(203,222,236,.55);
+  --map-channel:rgba(120,165,200,.28);
+
+  /* --- Tipografía --- */
+  --font-display:'Archivo', system-ui, -apple-system, sans-serif;
+  --font-sans:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono:'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  /* --- Forma --- */
+  --radius:14px;
+  --radius-sm:9px;
+  --shadow:0 1px 2px rgba(16,32,47,.06), 0 8px 24px -14px rgba(16,32,47,.28);
+  --ring:0 0 0 3px var(--accent-soft);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#071320;
+    --surface:#0d1f30;
+    --surface-2:#112636;
+    --surface-3:#16304353;
+    --border:#20394f;
+    --border-strong:#2c4a63;
+    --fg:#e7eff6;
+    --fg-muted:#9ab0c4;
+    --fg-faint:#6a8097;
+    --accent:#2cc0d4;
+    --accent-strong:#67d8e6;
+    --accent-soft:#0e3a45;
+    --lvl-low:#4a9fe0;
+    --lvl-ok:#28c2aa;
+    --lvl-warn:#f0bb2e;
+    --lvl-high:#f28f45;
+    --lvl-crit:#f4596c;
+    --map-label:rgba(203,222,236,.6);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+    --ring:0 0 0 3px #0e3a4580;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#071320;
+  --surface:#0d1f30;
+  --surface-2:#112636;
+  --surface-3:#16304353;
+  --border:#20394f;
+  --border-strong:#2c4a63;
+  --fg:#e7eff6;
+  --fg-muted:#9ab0c4;
+  --fg-faint:#6a8097;
+  --accent:#2cc0d4;
+  --accent-strong:#67d8e6;
+  --accent-soft:#0e3a45;
+  --lvl-low:#4a9fe0;
+  --lvl-ok:#28c2aa;
+  --lvl-warn:#f0bb2e;
+  --lvl-high:#f28f45;
+  --lvl-crit:#f4596c;
+  --map-label:rgba(203,222,236,.6);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  --ring:0 0 0 3px #0e3a4580;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-sans);line-height:1.5;
+  -webkit-font-smoothing:antialiased;font-size:15px}
+.wrap{max-width:1240px;margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:0}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+a{color:var(--accent-strong)}
+button{font-family:inherit}
+:focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
+
+/* ---------- Encabezado ---------- */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);
+  z-index:30;background:var(--surface)}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);
+  border-bottom:1px solid var(--border)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:11px}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto;min-width:0}
+.brand .mark{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--accent),var(--accent-strong));color:#fff}
+.brand h1{font-size:clamp(15px,2.4vw,19px);line-height:1.1}
+.brand p{margin:1px 0 0;font-size:11.5px;color:var(--fg-muted);letter-spacing:.02em}
+.live-dot{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+  padding:4px 9px;border-radius:20px;border:1px solid var(--border);color:var(--fg-muted);
+  background:var(--surface-2);white-space:nowrap}
+.live-dot i{width:7px;height:7px;border-radius:50%;background:var(--fg-faint)}
+.live-dot.on{color:var(--lvl-ok);border-color:color-mix(in srgb,var(--lvl-ok) 40%,transparent)}
+.live-dot.on i{background:var(--lvl-ok);box-shadow:0 0 0 0 color-mix(in srgb,var(--lvl-ok) 60%,transparent);animation:pulse 2.4s infinite}
+.live-dot.demo{color:var(--lvl-warn);border-color:color-mix(in srgb,var(--lvl-warn) 40%,transparent)}
+.live-dot.demo i{background:var(--lvl-warn)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--lvl-ok) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.ico-btn{flex:none;width:36px;height:36px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--fg);cursor:pointer;display:grid;place-items:center}
+.ico-btn:hover{border-color:var(--border-strong);background:var(--surface-3)}
+.ico-btn svg{width:18px;height:18px}
+
+/* ---------- Banda de estado / aviso ---------- */
+.notice{margin-top:14px;border:1px solid color-mix(in srgb,var(--lvl-warn) 45%,var(--border));
+  background:color-mix(in srgb,var(--lvl-warn) 10%,var(--surface));
+  border-radius:var(--radius);padding:12px 14px;display:flex;gap:11px;align-items:flex-start;font-size:13.5px}
+.notice svg{flex:none;width:19px;height:19px;color:var(--lvl-warn);margin-top:1px}
+.notice.live{border-color:color-mix(in srgb,var(--lvl-ok) 45%,var(--border));
+  background:color-mix(in srgb,var(--lvl-ok) 9%,var(--surface))}
+.notice.live svg{color:var(--lvl-ok)}
+.notice b{font-weight:600}
+.notice code{font-family:var(--font-mono);font-size:12px;background:var(--surface-3);padding:1px 6px;border-radius:5px}
+
+/* ---------- Secciones y grilla ---------- */
+main{padding-block:16px 40px}
+.section-h{display:flex;align-items:baseline;gap:10px;margin:26px 2px 12px}
+.section-h h2{font-size:17px}
+.section-h span{font-size:12px;color:var(--fg-muted)}
+.cols{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(0,1fr);gap:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:9px;padding:13px 15px 0}
+.card-h h3{font-size:14px}
+.card-h .tag{margin-left:auto;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--fg-muted);background:var(--surface-3);padding:3px 8px;border-radius:6px}
+.card-b{padding:13px 15px 15px}
+
+/* ---------- Franja de indicadores ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden;min-width:0}
+.kpi .lead{height:3px;position:absolute;left:0;top:0;width:100%}
+.kpi .lab{font-size:11.5px;color:var(--fg-muted);display:flex;align-items:center;gap:6px}
+.kpi .val{font-family:var(--font-mono);font-weight:600;font-size:clamp(20px,3vw,27px);margin-top:5px;letter-spacing:-.02em}
+.kpi .val small{font-size:13px;color:var(--fg-muted);font-weight:500}
+.kpi .sub{font-size:11.5px;color:var(--fg-muted);margin-top:3px}
+.kpi .chip{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:20px;margin-top:6px}
+
+/* ---------- Mapa ---------- */
+.map-card{overflow:hidden}
+.map-stage{position:relative;background:
+   radial-gradient(120% 90% at 30% 0%, var(--map-ink-2), var(--map-ink) 70%);
+   border-bottom:1px solid var(--border)}
+.map-stage svg{display:block;width:100%;height:auto;max-height:66vh}
+.map-overlay{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+  background:var(--map-ink);color:#cfe2f0;font-size:13px;gap:10px;opacity:0;transition:opacity .3s}
+.map-overlay.show{opacity:.96;pointer-events:auto}
+.spinner{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.18);
+  border-top-color:#7fd3e4;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.node{cursor:pointer}
+.node-hit{fill:transparent}
+.map-legend{display:flex;align-items:center;gap:13px;flex-wrap:wrap;padding:11px 15px;font-size:11.5px;color:var(--fg-muted)}
+.scale-bar{height:9px;width:132px;border-radius:5px;background:linear-gradient(90deg,#2b6cb0,#199b86,#c99400,#d9701f,#cf2f45)}
+.map-legend .ks{display:flex;align-items:center;gap:6px}
+.map-legend .ks b{font-weight:600;color:var(--fg)}
+.river-toggle{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-left:auto}
+.river-toggle button{border:0;background:var(--surface-2);color:var(--fg-muted);font-size:12px;font-weight:600;
+  padding:6px 11px;cursor:pointer}
+.river-toggle button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+/* ---------- Línea de tiempo ---------- */
+.timeline{padding:13px 15px 16px;border-top:1px solid var(--border)}
+.tl-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:11px}
+.play{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--accent);background:var(--accent);
+  color:#fff;font-weight:600;font-size:13px;padding:8px 14px;border-radius:9px;cursor:pointer}
+.play:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.play svg{width:15px;height:15px}
+.tl-date{font-family:var(--font-mono);font-weight:600;font-size:15px}
+.tl-phase{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+.tl-phase.obs{color:var(--accent-strong);background:var(--accent-soft)}
+.tl-phase.fc{color:var(--lvl-high);background:color-mix(in srgb,var(--lvl-high) 16%,transparent)}
+.tl-track{position:relative;height:30px;margin:0 2px}
+.tl-bg{position:absolute;top:11px;left:0;right:0;height:7px;border-radius:5px;background:var(--surface-3);overflow:hidden}
+.tl-fc{position:absolute;top:0;bottom:0;background:
+  repeating-linear-gradient(45deg,color-mix(in srgb,var(--lvl-high) 22%,transparent) 0 6px,transparent 6px 12px)}
+.tl-today{position:absolute;top:3px;height:24px;width:2px;background:var(--fg);opacity:.5;transform:translateX(-1px)}
+.tl-today b{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9.5px;font-weight:700;
+  letter-spacing:.06em;color:var(--fg-muted);white-space:nowrap}
+.tl-range{position:absolute;top:6px;left:0;width:100%;margin:0;height:18px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+.tl-range::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);
+  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:grab}
+.tl-range::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);
+  border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:grab}
+.tl-marks{display:flex;justify-content:space-between;font-size:10.5px;color:var(--fg-faint);margin-top:5px}
+
+/* ---------- Proyección ---------- */
+.proj-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.proj{border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;background:var(--surface-2)}
+.proj .rv{font-family:var(--font-display);font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.proj .rv i{width:10px;height:10px;border-radius:50%}
+.proj .steps{display:flex;gap:9px;margin-top:11px}
+.proj .step{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 10px}
+.proj .step .t{font-size:11px;color:var(--fg-muted)}
+.proj .step .q{font-family:var(--font-mono);font-weight:600;font-size:17px;margin-top:3px}
+.proj .step .q small{font-size:11px;color:var(--fg-muted);font-weight:500}
+.proj .step .band{font-size:10.5px;color:var(--fg-faint);margin-top:2px}
+.proj .delta{font-size:12px;margin-top:9px;color:var(--fg-muted)}
+.proj .delta b{font-family:var(--font-mono)}
+
+/* ---------- Estaciones ---------- */
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:11px}
+.st{text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:11px 12px;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s, border-color .12s}
+.st:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+.st[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), var(--shadow)}
+.st .r1{display:flex;align-items:center;gap:7px}
+.st .r1 i{width:9px;height:9px;border-radius:50%;flex:none}
+.st .nm{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st .pr{margin-left:auto;font-size:10px;color:var(--fg-faint);white-space:nowrap}
+.st .q{font-family:var(--font-mono);font-weight:600;font-size:18px;margin-top:7px;letter-spacing:-.02em}
+.st .q small{font-size:10.5px;color:var(--fg-muted);font-weight:500}
+.st .spark{display:block;width:100%;height:30px;margin-top:4px;overflow:visible}
+.st .st-chip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;margin-top:6px;display:inline-block}
+
+/* ---------- Detalle ---------- */
+.detail-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:15px}
+.chart-wrap{min-width:0}
+.chart-wrap svg{width:100%;height:auto;display:block}
+.chart-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--fg-muted);margin-top:8px}
+.chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.chart-legend .sw{width:16px;height:3px;border-radius:2px}
+.chart-legend .sw.band{height:11px;width:16px;border-radius:3px}
+.wx-now{display:flex;align-items:center;gap:13px;padding-bottom:11px;border-bottom:1px solid var(--border)}
+.wx-now .ic{width:46px;height:46px;flex:none;color:var(--accent)}
+.wx-now .t{font-family:var(--font-mono);font-weight:600;font-size:30px;letter-spacing:-.03em}
+.wx-now .d{font-size:12.5px;color:var(--fg-muted)}
+.wx-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.wx-meta span{font-size:11px;color:var(--fg-muted);background:var(--surface-3);padding:2px 8px;border-radius:6px}
+.wx-days{display:grid;grid-template-columns:repeat(auto-fit,minmax(54px,1fr));gap:4px;margin-top:12px}
+.wxd{text-align:center;padding:8px 2px;border-radius:8px;background:var(--surface-2)}
+.wxd .dn{font-size:10.5px;color:var(--fg-muted);text-transform:capitalize}
+.wxd .ic{width:22px;height:22px;margin:3px auto;color:var(--accent)}
+.wxd .mx{font-family:var(--font-mono);font-size:12px;font-weight:600}
+.wxd .mn{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted)}
+.wxd .pp{font-size:9.5px;color:var(--lvl-low);margin-top:2px}
+.ref-box{margin-top:13px;border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:12px}
+.ref-box h4{margin:0 0 8px;font-size:12px;font-family:var(--font-display);display:flex;align-items:center;gap:7px}
+.ref-bar{height:12px;border-radius:7px;background:var(--surface-3);position:relative;overflow:hidden;margin:9px 0 5px}
+.ref-bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px}
+.ref-bar .mk{position:absolute;top:-3px;height:18px;width:2px}
+.ref-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--fg-faint)}
+.ref-row{display:flex;justify-content:space-between;font-size:12px;margin:3px 0}
+.ref-row b{font-family:var(--font-mono)}
+
+/* ---------- ENSO ---------- */
+.enso .big{display:flex;align-items:center;gap:13px}
+.enso .orb{width:52px;height:52px;flex:none;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #ff9a5a, #e4542a 60%, #a92f17);
+  box-shadow:0 0 22px -4px #e4542a99}
+.enso .st-lab{font-family:var(--font-display);font-weight:700;font-size:19px}
+.enso .st-sub{font-size:12px;color:var(--fg-muted)}
+.enso dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:13px 0 0;font-size:12.5px}
+.enso dt{color:var(--fg-muted)}
+.enso dd{margin:0;text-align:right;font-weight:500}
+.enso .note{font-size:11px;color:var(--fg-faint);margin-top:11px;line-height:1.45}
+
+/* ---------- Fuentes / pie ---------- */
+.foot{margin-top:30px;border-top:1px solid var(--border);padding-top:18px;font-size:12.5px;color:var(--fg-muted)}
+.foot h3{font-size:13px;color:var(--fg);margin-bottom:9px}
+.src-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px 22px}
+.src-grid a{display:block;color:var(--accent-strong);text-decoration:none;padding:2px 0}
+.src-grid a:hover{text-decoration:underline}
+.method{margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;line-height:1.55}
+.method b{color:var(--fg)}
+.disclaimer{margin-top:12px;font-size:11.5px;color:var(--fg-faint);line-height:1.5}
+
+/* ---------- Responsive ---------- */
+@media (max-width:860px){
+  .cols{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .proj-grid{grid-template-columns:1fr}
+  .detail-grid{grid-template-columns:1fr}
+  .map-stage svg{max-height:none}
+}
+@media (max-width:420px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .brand p{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="top-in">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2"/><path d="M2 12c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2"/><path d="M2 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2"/></svg>
+      </span>
+      <div>
+        <h1>Monitor Paraná y Uruguay</h1>
+        <p>Estado hidrológico, clima y proyección a verano 2027</p>
+      </div>
+    </div>
+    <span id="mode" class="live-dot"><i></i><span id="modeTxt">Conectando…</span></span>
+    <button class="ico-btn" id="refresh" title="Actualizar datos" aria-label="Actualizar datos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button class="ico-btn" id="theme" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+  <!-- Aviso de modo (en vivo / demostración) -->
+  <div id="notice" class="notice" role="status">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <div id="noticeTxt"></div>
+  </div>
+
+  <!-- Indicadores clave -->
+  <div class="kpis" id="kpis"></div>
+
+  <main>
+    <!-- Mapa + línea de tiempo / Contexto -->
+    <div class="cols">
+      <div class="card map-card">
+        <div class="card-h">
+          <h3>Mapa de la cuenca</h3>
+          <div class="river-toggle" role="group" aria-label="Filtrar ríos">
+            <button data-rv="all" aria-pressed="true">Ambos</button>
+            <button data-rv="parana" aria-pressed="false">Paraná</button>
+            <button data-rv="uruguay" aria-pressed="false">Uruguay</button>
+          </div>
+        </div>
+        <div class="map-stage">
+          <div id="mapSvg"></div>
+          <div class="map-overlay" id="mapOverlay"><div class="spinner"></div><span>Cargando datos…</span></div>
+        </div>
+        <div class="map-legend">
+          <div class="ks"><b>Nivel de caudal</b></div>
+          <span>bajo</span><span class="scale-bar" aria-hidden="true"></span><span>crecida</span>
+          <div class="ks" style="margin-left:auto">relativo al rango del período (p5–p95) por estación</div>
+        </div>
+        <div class="timeline">
+          <div class="tl-head">
+            <button class="play" id="play"><svg id="playIco" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span id="playTxt">Animar crecida</span></button>
+            <span class="tl-date mono" id="tlDate">—</span>
+            <span class="tl-phase obs" id="tlPhase">Observado</span>
+          </div>
+          <div class="tl-track">
+            <div class="tl-bg"><div class="tl-fc" id="tlFc"></div></div>
+            <div class="tl-today" id="tlToday"><b>HOY</b></div>
+            <input class="tl-range" id="tlRange" type="range" min="0" max="100" value="0" aria-label="Línea de tiempo">
+          </div>
+          <div class="tl-marks" id="tlMarks"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;gap:16px">
+        <!-- ENSO -->
+        <div class="card enso">
+          <div class="card-h"><h3>Fenómeno El Niño</h3><span class="tag">ENSO</span></div>
+          <div class="card-b">
+            <div class="big">
+              <div class="orb" aria-hidden="true"></div>
+              <div>
+                <div class="st-lab">El Niño activo</div>
+                <div class="st-sub">Intensidad fuerte a muy fuerte</div>
+              </div>
+            </div>
+            <dl>
+              <dt>Pico previsto</dt><dd>Diciembre 2026</dd>
+              <dt>Persistencia</dt><dd>Hasta feb–mar 2027</dd>
+              <dt>Prob. muy fuerte</dt><dd>&gt;90 % (otoño-inv. NH)</dd>
+              <dt>Efecto en la cuenca</dt><dd>Lluvias y crecidas ↑</dd>
+            </dl>
+            <p class="note">El Niño intensifica las lluvias sobre la cuenca del Plata; organismos oficiales advierten crecidas del Paraná y el Uruguay que podrían agravarse entre enero y abril de 2027. Fuentes: NOAA/CPC y OMM. Próxima actualización ENSO de CPC: 12 nov 2026.</p>
+          </div>
+        </div>
+        <!-- Referencia oficial -->
+        <div class="card">
+          <div class="card-h"><h3>Alturas oficiales de referencia</h3><span class="tag">INA · Prefectura</span></div>
+          <div class="card-b" id="official"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proyección -->
+    <div class="section-h"><h2>Proyección hacia febrero–marzo 2027</h2><span id="projSrc"></span></div>
+    <div class="card"><div class="card-b"><div class="proj-grid" id="proj"></div></div></div>
+
+    <!-- Estaciones -->
+    <div class="section-h"><h2>Estaciones</h2><span>tocá una para ver clima y la curva de caudal</span></div>
+    <div class="st-grid" id="stations"></div>
+
+    <!-- Detalle -->
+    <div class="section-h"><h2 id="detTitle">Detalle</h2><span id="detSub"></span></div>
+    <div class="card"><div class="card-b"><div class="detail-grid">
+      <div class="chart-wrap">
+        <div id="chart"></div>
+        <div class="chart-legend">
+          <span><i class="sw" style="background:var(--accent)"></i>observado</span>
+          <span><i class="sw" style="background:var(--lvl-high);border-top:0"></i>pronóstico</span>
+          <span><i class="sw band" style="background:color-mix(in srgb,var(--lvl-high) 30%,transparent)"></i>incertidumbre (p25–p75)</span>
+        </div>
+      </div>
+      <div id="wx"></div>
+    </div></div></div>
+
+    <!-- Pie -->
+    <div class="foot">
+      <h3>Fuentes de datos</h3>
+      <div class="src-grid">
+        <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noopener">Open-Meteo · Global Flood API (caudal GloFAS)</a>
+        <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Open-Meteo · Weather Forecast API</a>
+        <a href="https://global-flood.emergency.copernicus.eu/" target="_blank" rel="noopener">Copernicus GloFAS (modelo hidrológico)</a>
+        <a href="https://www.ina.gob.ar/alerta/" target="_blank" rel="noopener">INA · Sistema de Alerta Hidrológico</a>
+        <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/" target="_blank" rel="noopener">NOAA / CPC · Diagnóstico ENSO</a>
+        <a href="https://public.wmo.int/es" target="_blank" rel="noopener">OMM · Boletines El Niño/La Niña</a>
+      </div>
+      <div class="method">
+        <b>Cómo leer estos datos.</b> El <b>caudal</b> (m³/s) proviene del modelo global GloFAS vía Open-Meteo — es el dato que se actualiza en vivo y permite proyectar hasta ~7 meses (incluye feb–mar 2027) con su banda de incertidumbre. La <b>altura hidrométrica</b> (metros) la miden INA y Prefectura; sus organismos no publican una API abierta para el navegador, por eso las alturas que ves son el último dato oficial conocido, fechado, con enlace a la fuente en vivo. Caudal y altura están relacionados pero no son lo mismo. El color del mapa es relativo al rango de cada estación en el período mostrado, no un umbral absoluto de inundación.
+      </div>
+      <p class="disclaimer" id="disclaimer"></p>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+/* ===========================================================================
+   Monitor hidrológico Paraná / Uruguay — lógica de la aplicación
+   Sin dependencias. Datos en vivo: Open-Meteo (CORS abierto, sin API key).
+   Si la conexión no está disponible (p. ej. dentro del sandbox de un artifact)
+   se muestra un ESCENARIO DE DEMOSTRACIÓN claramente rotulado.
+   =========================================================================== */
+
+/* ---------- utilidades ---------- */
+const $  = (s, r=document) => r.querySelector(s);
+const SVGNS = "http://www.w3.org/2000/svg";
+const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+const lerp  = (a,b,t)=>a+(b-a)*t;
+function smoothstep(a,b,x){const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);}
+const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const DIAS =["dom","lun","mar","mié","jue","vie","sáb"];
+function parseD(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
+function fmtD(s){const d=parseD(s);return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function isoD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function nf(x){ // formato de caudal legible
+  if(x==null||isNaN(x))return "—";
+  if(x>=10000)return Math.round(x/100)*100/1000+"";
+  return Math.round(x)+"";
+}
+function q(x){ // caudal con unidad compacta
+  if(x==null||isNaN(x))return {v:"—",u:""};
+  if(x>=1000)return {v:(x/1000).toFixed(x>=10000?0:1),u:"mil m³/s"};
+  return {v:Math.round(x)+"",u:"m³/s"};
+}
+
+/* ---------- escala de color de nivel ---------- */
+const STOPS=[[0,[43,108,176]],[.25,[25,155,134]],[.5,[201,148,0]],[.72,[217,112,31]],[1,[207,47,69]]];
+function levelColor(t){
+  t=clamp(t,0,1);
+  for(let i=1;i<STOPS.length;i++){
+    if(t<=STOPS[i][0]){
+      const [t0,c0]=STOPS[i-1],[t1,c1]=STOPS[i];
+      const k=(t-t0)/(t1-t0);
+      return `rgb(${Math.round(lerp(c0[0],c1[0],k))},${Math.round(lerp(c0[1],c1[1],k))},${Math.round(lerp(c0[2],c1[2],k))})`;
+    }
+  }
+  return `rgb(207,47,69)`;
+}
+const LVLVAR=t=>t<.2?"--lvl-low":t<.42?"--lvl-ok":t<.62?"--lvl-warn":t<.8?"--lvl-high":"--lvl-crit";
+const LVLTXT=t=>t<.2?"aguas bajas":t<.42?"normal":t<.62?"aguas altas":t<.8?"alerta":"crecida";
+
+/* ---------- estaciones (orden aguas arriba → abajo) ---------- */
+/* Coordenadas sobre el cauce principal. `oficial` = último dato publicado
+   por INA/Prefectura (cita en el pie); el resto se cubre con caudal GloFAS. */
+const STATIONS=[
+  // --- Río Paraná ---
+  {id:"corrientes",  nm:"Corrientes",            pr:"Corrientes",   rv:"parana", lat:-27.47, lon:-58.83, base:16000, key:true},
+  {id:"barranqueras",nm:"Barranqueras",          pr:"Chaco",        rv:"parana", lat:-27.48, lon:-58.94, base:16100},
+  {id:"goya",        nm:"Goya",                  pr:"Corrientes",   rv:"parana", lat:-29.14, lon:-59.26, base:16400},
+  {id:"lapaz",       nm:"La Paz",                pr:"Entre Ríos",   rv:"parana", lat:-30.75, lon:-59.64, base:16700},
+  {id:"santafe",     nm:"Santa Fe",              pr:"Santa Fe",     rv:"parana", lat:-31.64, lon:-60.70, base:17000, key:true},
+  {id:"parana",      nm:"Paraná",                pr:"Entre Ríos",   rv:"parana", lat:-31.74, lon:-60.51, base:17100, key:true},
+  {id:"diamante",    nm:"Diamante",              pr:"Entre Ríos",   rv:"parana", lat:-32.07, lon:-60.63, base:17300},
+  {id:"victoria",    nm:"Victoria",              pr:"Entre Ríos",   rv:"parana", lat:-32.62, lon:-60.33, base:17500},
+  {id:"rosario",     nm:"Rosario",               pr:"Santa Fe",     rv:"parana", lat:-32.93, lon:-60.63, base:17800, key:true,
+     oficial:{fecha:"2026-10-27",nivel:3.75,alerta:5.00,evac:5.25,proyDic:4.80,media:2.53,src:"INA/Prefectura"}},
+  {id:"villac",      nm:"Villa Constitución",    pr:"Santa Fe",     rv:"parana", lat:-33.23, lon:-60.31, base:18000},
+  {id:"sannicolas",  nm:"San Nicolás",           pr:"Buenos Aires", rv:"parana", lat:-33.34, lon:-60.21, base:18200},
+  {id:"sanpedro",    nm:"San Pedro",             pr:"Buenos Aires", rv:"parana", lat:-33.68, lon:-59.66, base:18300},
+  // --- Río Uruguay ---
+  {id:"libres",      nm:"Paso de los Libres",    pr:"Corrientes",   rv:"uruguay",lat:-29.71, lon:-57.09, base:4300, key:true,
+     oficial:{fecha:"2026-10-22",nivel:9.14,evac:8.50,src:"INA"}},
+  {id:"caseros",     nm:"Monte Caseros",         pr:"Corrientes",   rv:"uruguay",lat:-30.25, lon:-57.64, base:4600},
+  {id:"concordia",   nm:"Concordia",             pr:"Entre Ríos",   rv:"uruguay",lat:-31.39, lon:-58.02, base:5000, key:true},
+  {id:"colon",       nm:"Colón",                 pr:"Entre Ríos",   rv:"uruguay",lat:-32.22, lon:-58.14, base:5200},
+  {id:"concepcion",  nm:"Concepción del Uruguay",pr:"Entre Ríos",   rv:"uruguay",lat:-32.48, lon:-58.23, base:5400, key:true},
+  {id:"gualeguaychu",nm:"Gualeguaychú",          pr:"Entre Ríos",   rv:"uruguay",lat:-33.01, lon:-58.51, base:5600},
+];
+const byId=Object.fromEntries(STATIONS.map(s=>[s.id,s]));
+
+/* ---------- estado global ---------- */
+const state={mode:null, dates:[], todayIdx:0, idx:0, river:"all", sel:"rosario", playing:false};
+
+/* =====================  CARGA DE DATOS  ===================== */
+const WX_URL="https://api.open-meteo.com/v1/forecast";
+const FLOOD_URL="https://flood-api.open-meteo.com/v1/flood";
+
+function fetchJSON(url,ms=11000){
+  const c=new AbortController();const to=setTimeout(()=>c.abort(),ms);
+  return fetch(url,{signal:c.signal}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).finally(()=>clearTimeout(to));
+}
+const asArr=x=>Array.isArray(x)?x:[x];
+
+async function loadLive(){
+  const lats=STATIONS.map(s=>s.lat).join(",");
+  const lons=STATIONS.map(s=>s.lon).join(",");
+  const fUrl=`${FLOOD_URL}?latitude=${lats}&longitude=${lons}`+
+    `&daily=river_discharge,river_discharge_mean,river_discharge_p25,river_discharge_p75`+
+    `&past_days=92&forecast_days=210`;
+  const wUrl=`${WX_URL}?latitude=${lats}&longitude=${lons}`+
+    `&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m`+
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max`+
+    `&timezone=auto&forecast_days=10`;
+  const [f,w]=await Promise.all([fetchJSON(fUrl),fetchJSON(wUrl)]);
+  const fa=asArr(f), wa=asArr(w);
+  const time=(fa[0]&&fa[0].daily&&fa[0].daily.time)||[];
+  if(!time.length) throw new Error("sin serie de caudal");
+  STATIONS.forEach((s,i)=>{
+    const d=(fa[i]&&fa[i].daily)||{};
+    s.disc=(d.river_discharge||d.river_discharge_mean||[]).map(v=>v==null?null:+v);
+    s.p25=(d.river_discharge_p25||[]).map(v=>v==null?null:+v);
+    s.p75=(d.river_discharge_p75||[]).map(v=>v==null?null:+v);
+    s.wx=wa[i]||null;
+  });
+  state.dates=time;
+  // "hoy" = primer día sin past_days (índice 92, acotado por si la API recorta)
+  state.todayIdx=Math.min(92,time.length-1);
+  state.mode="live";
+  computeNorms();
+}
+
+/* --- escenario de demostración (rotulado) --- */
+function demo(){
+  const n=92+210, today=new Date(), start=addDays(today,-92);
+  const time=[];for(let i=0;i<n;i++)time.push(isoD(addDays(start,i)));
+  const todayIdx=92;
+  const peakFrac=Math.min(.95,(todayIdx+120)/(n-1)); // pico ~ fin feb / marzo 2027
+  STATIONS.forEach((s,si)=>{
+    const disc=[],p25=[],p75=[];
+    for(let i=0;i<n;i++){
+      const t=i/(n-1);
+      const rise=0.9+1.0*smoothstep(0,peakFrac,t);
+      const post=t>peakFrac?1-0.14*smoothstep(peakFrac,1,t):1;
+      const wave=1+0.05*Math.sin(t*Math.PI*5+si);
+      const v=s.base*rise*post*wave;
+      disc.push(v);
+      if(i>=todayIdx){const lead=(i-todayIdx)/(n-todayIdx);
+        p25.push(v*(1-0.03-0.13*lead));p75.push(v*(1+0.03+0.20*lead));}
+      else{p25.push(null);p75.push(null);}
+    }
+    s.disc=disc;s.p25=p25;s.p75=p75;
+    // clima de demostración (verano del Litoral)
+    const wc=[0,1,2,3,61,80,95][si%7];
+    const tmax=[],tmin=[],pcode=[],psum=[],pprob=[],wdt=[];
+    for(let i=0;i<10;i++){wdt.push(isoD(addDays(today,i)));
+      tmax.push(28+Math.round(5*Math.sin(i+si)));tmin.push(18+Math.round(3*Math.cos(i+si)));
+      pcode.push([0,1,2,3,61,80,95,2,1,3][(i+si)%10]);
+      psum.push([0,0,2,8,14,0,5,0,1,0][(i+si)%10]);pprob.push([5,10,30,60,70,20,55,15,25,10][(i+si)%10]);}
+    s.wx={current:{temperature_2m:27+si%4,relative_humidity_2m:62,precipitation:0,weather_code:wc,wind_speed_10m:14},
+      daily:{time:wdt,weather_code:pcode,temperature_2m_max:tmax,temperature_2m_min:tmin,precipitation_sum:psum,precipitation_probability_max:pprob}};
+  });
+  state.dates=time;state.todayIdx=todayIdx;state.mode="demo";
+  computeNorms();
+}
+
+/* normaliza cada estación a su propio rango p5–p95 para el color del mapa */
+function computeNorms(){
+  STATIONS.forEach(s=>{
+    const xs=s.disc.filter(v=>v!=null&&!isNaN(v)).slice().sort((a,b)=>a-b);
+    if(!xs.length){s.lo=0;s.hi=1;return;}
+    const pct=p=>xs[clamp(Math.floor(p*(xs.length-1)),0,xs.length-1)];
+    s.lo=pct(0.05);s.hi=Math.max(pct(0.95),s.lo+1);
+  });
+}
+function normAt(s,i){const v=s.disc[i];if(v==null)return 0;return clamp((v-s.lo)/(s.hi-s.lo),0,1);}
+function idxForDate(iso){const t=parseD(iso).getTime();let best=0,bd=1/0;
+  state.dates.forEach((d,i)=>{const dd=Math.abs(parseD(d).getTime()-t);if(dd<bd){bd=dd;best=i;}});return best;}
+
+/* =====================  PROYECCIÓN DEL MAPA (geo → SVG)  ===================== */
+const GEO={lonMin:-61.05,lonMax:-56.55,latN:-26.9,latS:-34.25,P:46,H:1040};
+const cosf=Math.cos(30.8*Math.PI/180);
+const uLat=GEO.H/(GEO.latN-GEO.latS);           // px por grado de latitud
+const uLon=uLat*cosf;                            // corrección por longitud
+const DRAWW=(GEO.lonMax-GEO.lonMin)*uLon;
+const VBW=DRAWW+GEO.P*2, VBH=GEO.H+GEO.P*2;
+const pX=lon=>GEO.P+(lon-GEO.lonMin)*uLon;
+const pY=lat=>GEO.P+(GEO.latN-lat)*uLat;
+
+/* Catmull-Rom → Bézier por segmentos (devuelve lista de "d") */
+function segPaths(pts){
+  const seg=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||pts[i+1];
+    const c1x=p1.x+(p2.x-p0.x)/6, c1y=p1.y+(p2.y-p0.y)/6;
+    const c2x=p2.x-(p3.x-p1.x)/6, c2y=p2.y-(p3.y-p1.y)/6;
+    seg.push(`M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`);
+  }
+  return seg;
+}
+let MAP={}; // referencias a elementos para actualizar en la animación
+
+function buildMap(){
+  const host=$("#mapSvg");host.textContent="";
+  const svg=document.createElementNS(SVGNS,"svg");
+  svg.setAttribute("viewBox",`0 0 ${VBW.toFixed(0)} ${VBH.toFixed(0)}`);
+  svg.setAttribute("role","img");
+  svg.setAttribute("aria-label","Mapa de la cuenca con las estaciones de los ríos Paraná y Uruguay");
+
+  // grilla tenue
+  const g=document.createElementNS(SVGNS,"g");
+  for(let lo=-61;lo<=-57;lo++){const x=pX(lo);g.appendChild(line(x,0,x,VBH,"var(--map-grid)",1));}
+  for(let la=-27;la>=-34;la--){const y=pY(la);g.appendChild(line(0,y,VBW,y,"var(--map-grid)",1));}
+  svg.appendChild(g);
+
+  // etiquetas de contexto (muy tenues)
+  const ctx=[["CHACO",-27.0,-60.4],["CORRIENTES",-28.6,-58.0],["SANTA FE",-30.6,-60.8],
+    ["ENTRE RÍOS",-31.6,-59.2],["URUGUAY",-31.2,-56.95],["BUENOS AIRES",-33.7,-60.7],
+    ["Río de la Plata",-34.05,-58.4]];
+  ctx.forEach(([t,la,lo])=>{const tx=txt(pX(lo),pY(la),t,"var(--map-label)",11);
+    tx.setAttribute("letter-spacing","1.5");tx.setAttribute("text-anchor","middle");svg.appendChild(tx);});
+
+  MAP={rivers:{},segs:{parana:[],uruguay:[]},nodes:{},labels:{}};
+  ["parana","uruguay"].forEach(rv=>{
+    const list=STATIONS.filter(s=>s.rv===rv);
+    const pts=list.map(s=>({x:pX(s.lon),y:pY(s.lat),s}));
+    // punta hacia el delta para prolongar el cauce
+    const tail=rv==="parana"?{x:pX(-59.0),y:pY(-34.0)}:{x:pX(-58.4),y:pY(-33.6)};
+    const full=pts.concat([tail]);
+    // canal base (estático)
+    const baseD=segPaths(full).join(" ");
+    const base=path(baseD,"var(--map-channel)",10);base.setAttribute("fill","none");
+    base.setAttribute("stroke-linecap","round");svg.appendChild(base);
+    // segmentos coloreables
+    const segD=segPaths(full);
+    const gr=document.createElementNS(SVGNS,"g");
+    segD.forEach((d,i)=>{const p=path(d,"var(--map-channel)",6);p.setAttribute("fill","none");
+      p.setAttribute("stroke-linecap","round");gr.appendChild(p);MAP.segs[rv].push({el:p,a:list[i],b:list[i+1]||list[i]});});
+    svg.appendChild(gr);MAP.rivers[rv]=gr;
+    // nodos
+    list.forEach(s=>{
+      const x=pX(s.lon),y=pY(s.lat);
+      const halo=circle(x,y,8,levelColor(0));halo.setAttribute("opacity",".25");svg.appendChild(halo);
+      const c=circle(x,y,5.5,levelColor(0));c.setAttribute("stroke","var(--map-ink)");c.setAttribute("stroke-width","1.6");
+      c.classList.add("node");svg.appendChild(c);
+      const hit=circle(x,y,15,"transparent");hit.classList.add("node","node-hit");
+      hit.addEventListener("click",()=>selectStation(s.id));
+      const tt=document.createElementNS(SVGNS,"title");tt.textContent=s.nm;hit.appendChild(tt);
+      svg.appendChild(hit);
+      let lab=null;
+      if(s.key){lab=txt(x+(rv==="uruguay"?9:-9),y+3,s.nm,"var(--map-label)",11.5);
+        lab.setAttribute("text-anchor",rv==="uruguay"?"start":"end");lab.setAttribute("font-weight","600");svg.appendChild(lab);}
+      MAP.nodes[s.id]={c,halo,x,y};MAP.labels[s.id]=lab;
+    });
+  });
+  // etiqueta de la estación seleccionada (encima)
+  const selLab=document.createElementNS(SVGNS,"g");selLab.setAttribute("id","selLab");svg.appendChild(selLab);
+  MAP.selLab=selLab;
+  host.appendChild(svg);
+  applyRiverFilter();
+}
+function line(x1,y1,x2,y2,st,w){const l=document.createElementNS(SVGNS,"line");
+  l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);
+  l.setAttribute("stroke",st);l.setAttribute("stroke-width",w);return l;}
+function path(d,st,w){const p=document.createElementNS(SVGNS,"path");p.setAttribute("d",d);
+  p.setAttribute("stroke",st);p.setAttribute("stroke-width",w);return p;}
+function circle(x,y,r,f){const c=document.createElementNS(SVGNS,"circle");
+  c.setAttribute("cx",x);c.setAttribute("cy",y);c.setAttribute("r",r);c.setAttribute("fill",f);return c;}
+function txt(x,y,s,f,size){const t=document.createElementNS(SVGNS,"text");
+  t.setAttribute("x",x);t.setAttribute("y",y);t.setAttribute("fill",f);t.setAttribute("font-size",size);
+  t.setAttribute("font-family","var(--font-sans)");t.textContent=s;return t;}
+
+function updateMap(i){
+  STATIONS.forEach(s=>{
+    const t=normAt(s,i),col=levelColor(t),nd=MAP.nodes[s.id];if(!nd)return;
+    nd.c.setAttribute("fill",col);nd.c.setAttribute("r",(5+t*3).toFixed(1));
+    nd.halo.setAttribute("fill",col);nd.halo.setAttribute("r",(8+t*12).toFixed(1));
+    nd.halo.setAttribute("opacity",(0.18+t*0.28).toFixed(2));
+  });
+  ["parana","uruguay"].forEach(rv=>MAP.segs[rv].forEach(sg=>{
+    const t=(normAt(sg.a,i)+normAt(sg.b,i))/2;
+    sg.el.setAttribute("stroke",levelColor(t));sg.el.setAttribute("stroke-width",(5+t*9).toFixed(1));
+  }));
+  const d=state.dates[i];
+  $("#tlDate").textContent=fmtD(d);
+  const fc=i>=state.todayIdx;
+  const ph=$("#tlPhase");ph.textContent=fc?"Pronóstico":"Observado";ph.className="tl-phase "+(fc?"fc":"obs");
+}
+function drawSelLabel(){
+  const g=MAP.selLab;if(!g)return;g.textContent="";
+  const s=byId[state.sel],nd=MAP.nodes[s.id];if(!nd)return;
+  const left=s.rv==="parana";
+  const bw=s.nm.length*7.2+18, bx=left?nd.x-10-bw:nd.x+10, by=nd.y-13;
+  const r=document.createElementNS(SVGNS,"rect");
+  r.setAttribute("x",bx);r.setAttribute("y",by);r.setAttribute("width",bw);r.setAttribute("height",24);
+  r.setAttribute("rx",7);r.setAttribute("fill","var(--accent)");g.appendChild(r);
+  const tt=txt(left?bx+bw-9:bx+9,by+16,s.nm,"#fff",12);
+  tt.setAttribute("text-anchor",left?"end":"start");tt.setAttribute("font-weight","600");g.appendChild(tt);
+  const ring=circle(nd.x,nd.y,9,"none");ring.setAttribute("stroke","#fff");ring.setAttribute("stroke-width","2");g.appendChild(ring);
+}
+function applyRiverFilter(){
+  const rv=state.river;
+  ["parana","uruguay"].forEach(r=>{
+    const show=rv==="all"||rv===r, op=show?"1":"0.12";
+    if(MAP.rivers[r])MAP.rivers[r].style.opacity=op;
+    STATIONS.filter(s=>s.rv===r).forEach(s=>{const nd=MAP.nodes[s.id];if(nd){nd.c.style.opacity=op;nd.halo.style.opacity=show?"":"0.08";}
+      const lb=MAP.labels[s.id];if(lb)lb.style.opacity=show?"":"0.25";});
+  });
+}
+
+/* =====================  LÍNEA DE TIEMPO  ===================== */
+function setupTimeline(){
+  const r=$("#tlRange");r.max=state.dates.length-1;r.value=state.todayIdx;state.idx=state.todayIdx;
+  const frac=state.todayIdx/(state.dates.length-1);
+  $("#tlFc").style.left=(frac*100)+"%";$("#tlFc").style.right="0";
+  $("#tlToday").style.left=(frac*100)+"%";
+  // marcas de meses
+  const marks=$("#tlMarks");marks.textContent="";
+  const picks=[0,Math.round((state.dates.length-1)*.33),state.todayIdx,Math.round((state.dates.length-1)*.72),state.dates.length-1];
+  [...new Set(picks)].sort((a,b)=>a-b).forEach(i=>{const d=parseD(state.dates[i]);
+    const sp=document.createElement("span");sp.textContent=`${MESES[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;marks.appendChild(sp);});
+  r.oninput=()=>{stop();state.idx=+r.value;updateMap(state.idx);};
+  updateMap(state.idx);
+}
+let raf=0,acc=0,last=0;
+function play(){
+  if(state.playing)return;stop(); // reinicio limpio
+  if(state.idx>=state.dates.length-1)state.idx=0;
+  state.playing=true;$("#playTxt").textContent="Pausar";
+  $("#playIco").innerHTML='<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+  last=performance.now();acc=0;
+  const step=(now)=>{
+    if(!state.playing)return;
+    acc+=now-last;last=now;
+    while(acc>=42){acc-=42;state.idx++;if(state.idx>=state.dates.length-1){state.idx=state.dates.length-1;updateMap(state.idx);$("#tlRange").value=state.idx;return stop();}}
+    updateMap(state.idx);$("#tlRange").value=state.idx;
+    raf=requestAnimationFrame(step);
+  };
+  raf=requestAnimationFrame(step);
+}
+function stop(){state.playing=false;cancelAnimationFrame(raf);
+  $("#playTxt").textContent="Animar crecida";$("#playIco").innerHTML='<path d="M8 5v14l11-7z"/>';}
+
+/* =====================  INDICADORES (KPIs)  ===================== */
+function renderKPIs(){
+  const host=$("#kpis");host.textContent="";
+  const ros=byId.rosario,lib=byId.libres,ti=state.todayIdx;
+  // nº de estaciones en nivel alto (t>=0.62 hoy)
+  let alertas=0;STATIONS.forEach(s=>{if(normAt(s,ti)>=0.62)alertas++;});
+  const feb=idxForDate("2027-02-15");
+  const kpis=[
+    {lab:"Paraná · Rosario",val:ros.oficial.nivel.toFixed(2),u:"m",sub:`alerta ${ros.oficial.alerta.toFixed(2)} m · dato ${fmtD(ros.oficial.fecha)}`,
+      t:clamp(ros.oficial.nivel/ros.oficial.alerta,0,1),chip:"altura oficial"},
+    {lab:"Uruguay · P. de los Libres",val:lib.oficial.nivel.toFixed(2),u:"m",sub:`evacuación ${lib.oficial.evac.toFixed(2)} m · dato ${fmtD(lib.oficial.fecha)}`,
+      t:clamp(lib.oficial.nivel/lib.oficial.evac,0,1),chip:lib.oficial.nivel>=lib.oficial.evac?"sobre evacuación":"altura oficial"},
+    {lab:"Estaciones en nivel alto",val:alertas+"",u:`/ ${STATIONS.length}`,sub:"caudal ≥ alerta relativa (hoy)",
+      t:alertas/STATIONS.length,chip:"caudal GloFAS"},
+    {lab:"Proyección feb 2027",val:"+"+Math.round((byId.rosario.disc[feb]/byId.rosario.disc[ti]-1)*100)+"%",u:"",
+      sub:"caudal Paraná (Rosario) vs hoy",t:0.8,chip:state.mode==="live"?"GloFAS en vivo":"escenario demo"}
+  ];
+  kpis.forEach(k=>{
+    const col=`var(${LVLVAR(k.t)})`;
+    const el=document.createElement("div");el.className="kpi";
+    el.innerHTML=`<div class="lead" style="background:${col}"></div>
+      <div class="lab">${k.lab}</div>
+      <div class="val">${k.val}<small> ${k.u}</small></div>
+      <div class="sub">${k.sub}</div>
+      <span class="chip" style="background:color-mix(in srgb,${col} 16%,transparent);color:${col}">${k.chip}</span>`;
+    host.appendChild(el);
+  });
+}
+
+/* =====================  REFERENCIA OFICIAL  ===================== */
+function renderOfficial(){
+  const host=$("#official");host.textContent="";
+  [byId.rosario,byId.libres].forEach(s=>{
+    const o=s.oficial,top=(o.evac||o.alerta)*1.1;
+    const w=v=>clamp(v/top,0,1)*100;
+    const over=o.evac&&o.nivel>=o.evac;
+    const col=over?"var(--lvl-crit)":o.alerta&&o.nivel>=o.alerta?"var(--lvl-high)":"var(--lvl-ok)";
+    const box=document.createElement("div");box.className="ref-box";box.style.marginTop="0";box.style.marginBottom="12px";
+    box.innerHTML=`<h4><i style="width:9px;height:9px;border-radius:50%;background:${col};display:inline-block"></i>${s.nm} · ${s.pr}</h4>
+      <div class="ref-bar">
+        <div class="fill" style="width:${w(o.nivel)}%;background:${col}"></div>
+        ${o.alerta?`<div class="mk" style="left:${w(o.alerta)}%;background:var(--lvl-high)"></div>`:""}
+        ${o.evac?`<div class="mk" style="left:${w(o.evac)}%;background:var(--lvl-crit)"></div>`:""}
+      </div>
+      <div class="ref-scale"><span>0 m</span><span>${top.toFixed(1)} m</span></div>
+      <div class="ref-row"><span>Altura (último dato)</span><b>${o.nivel.toFixed(2)} m</b></div>
+      ${o.alerta?`<div class="ref-row"><span>Nivel de alerta</span><b>${o.alerta.toFixed(2)} m</b></div>`:""}
+      ${o.evac?`<div class="ref-row"><span>Nivel de evacuación</span><b>${o.evac.toFixed(2)} m</b></div>`:""}
+      ${o.proyDic?`<div class="ref-row"><span>Proyección INA diciembre</span><b>~${o.proyDic.toFixed(2)} m</b></div>`:""}
+      ${o.media?`<div class="ref-row"><span>Media histórica de octubre</span><b>${o.media.toFixed(2)} m</b></div>`:""}
+      <div class="ref-row" style="color:var(--fg-faint)"><span>Fuente · ${fmtD(o.fecha)}</span><span>${o.src}</span></div>`;
+    host.appendChild(box);
+  });
+  const p=document.createElement("p");p.className="enso-note";p.style.cssText="font-size:11px;color:var(--fg-faint);margin:2px 2px 0;line-height:1.45";
+  p.innerHTML='Alturas de todas las estaciones, en vivo, en <a href="https://www.ina.gob.ar/alerta/" target="_blank" rel="noopener">INA · Alerta Hidrológico</a>.';
+  host.appendChild(p);
+}
+
+/* =====================  PROYECCIÓN feb–mar 2027  ===================== */
+function renderProjection(){
+  $("#projSrc").textContent=state.mode==="live"?"caudal GloFAS en vivo · modelo Copernicus":"escenario de demostración — abrí el archivo para datos reales";
+  const host=$("#proj");host.textContent="";
+  const ti=state.todayIdx,feb=idxForDate("2027-02-15"),mar=idxForDate("2027-03-15");
+  [["parana","rosario","Río Paraná","Rosario"],["uruguay","concordia","Río Uruguay","Concordia"]].forEach(([rv,id,rvn,stn])=>{
+    const s=byId[id];const col=levelColor(normAt(s,feb));
+    const hoy=s.disc[ti];
+    const cell=(i)=>{const v=s.disc[i],lo=s.p25[i],hi=s.p75[i],o=q(v);
+      return `<div class="step"><div class="t">${i===feb?"15 feb 2027":"15 mar 2027"}</div>
+        <div class="q">${o.v}<small> ${o.u}</small></div>
+        <div class="band">${lo&&hi?`rango ${nf(lo)}–${nf(hi)} mil m³/s`:"mediana del modelo"}</div></div>`;};
+    const dPct=Math.round((s.disc[feb]/hoy-1)*100);
+    const el=document.createElement("div");el.className="proj";
+    el.innerHTML=`<div class="rv"><i style="background:${col}"></i>${rvn} · ${stn}</div>
+      <div class="steps">${cell(feb)}${cell(mar)}</div>
+      <div class="delta">Caudal hoy <b>${q(hoy).v} ${q(hoy).u}</b> → proyección feb <b style="color:${col}">${dPct>=0?"+":""}${dPct}%</b></div>`;
+    host.appendChild(el);
+  });
+}
+
+/* =====================  GRILLA DE ESTACIONES  ===================== */
+function sparkline(s){
+  const ti=state.todayIdx,n=state.dates.length;
+  const w=160,h=30,pts=[];
+  // submuestreo para dibujar liviano
+  const stepN=Math.max(1,Math.floor(n/60));
+  const vals=[];for(let i=0;i<n;i+=stepN)vals.push({i,v:s.disc[i]});
+  const mn=Math.min(...vals.map(p=>p.v)),mx=Math.max(...vals.map(p=>p.v))||1;
+  vals.forEach((p,k)=>{const x=k/(vals.length-1)*w,y=h-2-((p.v-mn)/(mx-mn||1))*(h-4);pts.push([x,y,p.i]);});
+  const dObs=pts.filter(p=>p[2]<=ti).map((p,k)=>(k?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const dFc=pts.filter(p=>p[2]>=ti).map((p,k)=>(k?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const fx=(ti/(n-1))*w;
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="${fx.toFixed(1)}" y1="0" x2="${fx.toFixed(1)}" y2="${h}" stroke="var(--fg-faint)" stroke-width="1" stroke-dasharray="2 2" opacity=".5"/>
+    <path d="${dObs}" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+    <path d="${dFc}" fill="none" stroke="var(--lvl-high)" stroke-width="1.8" stroke-dasharray="3 2.5"/>
+  </svg>`;
+}
+function renderStations(){
+  const host=$("#stations");host.textContent="";
+  const ti=state.todayIdx;
+  STATIONS.forEach(s=>{
+    const t=normAt(s,ti),col=`var(${LVLVAR(t)})`,o=q(s.disc[ti]);
+    const b=document.createElement("button");b.className="st";b.dataset.id=s.id;
+    b.setAttribute("aria-current",s.id===state.sel);
+    b.innerHTML=`<div class="r1"><i style="background:${col}"></i><span class="nm">${s.nm}</span><span class="pr">${s.rv==="parana"?"Paraná":"Uruguay"}</span></div>
+      <div class="q">${o.v}<small> ${o.u}</small></div>
+      ${sparkline(s)}
+      <span class="st-chip" style="background:color-mix(in srgb,${col} 16%,transparent);color:${col}">${LVLTXT(t)}</span>`;
+    b.addEventListener("click",()=>selectStation(s.id));
+    host.appendChild(b);
+  });
+}
+
+/* =====================  DETALLE (clima + curva)  ===================== */
+function selectStation(id){
+  state.sel=id;
+  document.querySelectorAll(".st").forEach(b=>b.setAttribute("aria-current",b.dataset.id===id));
+  drawSelLabel();renderDetail();
+  const dt=$("#detTitle");if(dt)dt.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function renderDetail(){
+  const s=byId[state.sel];
+  $("#detTitle").textContent=s.nm;
+  $("#detSub").textContent=`${s.pr} · Río ${s.rv==="parana"?"Paraná":"Uruguay"}`;
+  renderChart(s);renderWx(s);
+}
+function renderChart(s){
+  const host=$("#chart");host.textContent="";
+  const n=state.dates.length,ti=state.todayIdx;
+  const W=720,H=240,ml=52,mr=14,mt=14,mb=28,iw=W-ml-mr,ih=H-mt-mb;
+  const vals=s.disc.filter(v=>v!=null);
+  let mx=Math.max(...vals,...s.p75.filter(v=>v!=null));
+  const ceil=Math.ceil(mx/1000)*1000||1;
+  const X=i=>ml+(i/(n-1))*iw, Y=v=>mt+ih-(v/ceil)*ih;
+  const svg=document.createElementNS(SVGNS,"svg");svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("role","img");svg.setAttribute("aria-label",`Caudal de ${s.nm}: observado y pronóstico hasta 2027`);
+  // grilla + eje Y
+  for(let k=0;k<=4;k++){const v=ceil*k/4,y=Y(v);
+    svg.appendChild(line(ml,y,W-mr,y,"var(--border)",1));
+    const t=txt(ml-8,y+4,(v>=1000?(v/1000)+"k":v)+"",'var(--fg-faint)',11);t.setAttribute("text-anchor","end");svg.appendChild(t);}
+  const yl=txt(14,mt+ih/2,"m³/s","var(--fg-muted)",11);yl.setAttribute("transform",`rotate(-90 14 ${mt+ih/2})`);yl.setAttribute("text-anchor","middle");svg.appendChild(yl);
+  // eje X por meses
+  let lastM=-1;
+  for(let i=0;i<n;i+=1){const d=parseD(state.dates[i]);if(d.getMonth()!==lastM&&d.getDate()<=3){lastM=d.getMonth();
+    const x=X(i);const t=txt(x,H-9,`${MESES[d.getMonth()]}`,'var(--fg-faint)',10);t.setAttribute("text-anchor","middle");svg.appendChild(t);
+    svg.appendChild(line(x,mt,x,mt+ih,"var(--border)",1));}}
+  // banda de incertidumbre (p25–p75) en el tramo de pronóstico
+  let band="";const up=[],dn=[];
+  for(let i=ti;i<n;i++){if(s.p25[i]!=null&&s.p75[i]!=null){up.push(`${X(i).toFixed(1)} ${Y(s.p75[i]).toFixed(1)}`);dn.unshift(`${X(i).toFixed(1)} ${Y(s.p25[i]).toFixed(1)}`);}}
+  if(up.length){band=`M${up.join(" L")} L${dn.join(" L")} Z`;
+    const b=path(band,"none",0);b.setAttribute("fill","color-mix(in srgb,var(--lvl-high) 24%,transparent)");svg.appendChild(b);}
+  // línea observada / pronóstico
+  const dObs=[],dFc=[];
+  for(let i=0;i<n;i++){const v=s.disc[i];if(v==null)continue;const seg=`${X(i).toFixed(1)} ${Y(v).toFixed(1)}`;
+    if(i<=ti)dObs.push(seg);if(i>=ti)dFc.push(seg);}
+  const po=path("M"+dObs.join(" L"),"var(--accent)",2.2);po.setAttribute("fill","none");svg.appendChild(po);
+  const pf=path("M"+dFc.join(" L"),"var(--lvl-high)",2.2);pf.setAttribute("fill","none");pf.setAttribute("stroke-dasharray","5 3");svg.appendChild(pf);
+  // línea HOY
+  svg.appendChild(line(X(ti),mt,X(ti),mt+ih,"var(--fg)",1.4));
+  const th=txt(X(ti),mt-3,"HOY","var(--fg-muted)",10);th.setAttribute("text-anchor","middle");th.setAttribute("font-weight","700");svg.appendChild(th);
+  // marcas feb / mar 2027
+  [["2027-02-15","feb"],["2027-03-15","mar"]].forEach(([iso,lb])=>{const i=idxForDate(iso);const v=s.disc[i];if(v==null)return;
+    const c=circle(X(i),Y(v),4,"var(--lvl-crit)");c.setAttribute("stroke","var(--surface)");c.setAttribute("stroke-width","2");svg.appendChild(c);
+    const t=txt(X(i),Y(v)-9,lb+" ’27","var(--lvl-crit)",10);t.setAttribute("text-anchor","middle");t.setAttribute("font-weight","600");svg.appendChild(t);});
+  // punto final destacado
+  const le=n-1,lev=s.disc[le];if(lev!=null){const c=circle(X(le),Y(lev),3.5,"var(--lvl-high)");svg.appendChild(c);}
+  host.appendChild(svg);
+}
+const WDESC={0:"Despejado",1:"Mayormente despejado",2:"Parcialmente nublado",3:"Nublado",45:"Niebla",48:"Niebla",
+  51:"Llovizna",53:"Llovizna",55:"Llovizna intensa",56:"Llovizna helada",57:"Llovizna helada",
+  61:"Lluvia leve",63:"Lluvia",65:"Lluvia fuerte",66:"Lluvia helada",67:"Lluvia helada",
+  71:"Nieve",73:"Nieve",75:"Nieve intensa",77:"Granos de nieve",80:"Chaparrones",81:"Chaparrones",82:"Chaparrones fuertes",
+  85:"Chaparrones de nieve",86:"Chaparrones de nieve",95:"Tormenta",96:"Tormenta con granizo",99:"Tormenta con granizo"};
+function wIcon(c){
+  const sun='<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M19.4 4.6l-1.6 1.6M6.2 17.8l-1.6 1.6"/>';
+  const cloud='<path d="M7 18h9a4 4 0 0 0 .4-7.98A5.5 5.5 0 0 0 6 9.2 3.9 3.9 0 0 0 7 18z"/>';
+  const part='<path d="M3 13a3 3 0 0 1 3-3c.3-2 2-3.5 4-3.5 1.9 0 3.5 1.3 3.9 3.1A3.2 3.2 0 0 1 17 15H6a3 3 0 0 1-3-2z"/><path d="M15 6.5l1-1.6M19.5 9l1.7-.6M18.5 4.5l.3-1.8"/>';
+  const rain=cloud+'<path d="M8 20l-1 2M12 20l-1 2M16 20l-1 2"/>';
+  const storm=cloud+'<path d="M12 19l-2 3h3l-2 3"/>';
+  const fog='<path d="M4 9h13M6 13h12M4 17h13" />';
+  let g=sun;
+  if(c===1||c===2)g=part;else if(c===3)g=cloud;else if(c===45||c===48)g=fog;
+  else if((c>=51&&c<=67)||(c>=80&&c<=82))g=rain;else if(c>=71&&c<=86)g=rain;else if(c>=95)g=storm;
+  return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${g}</svg>`;
+}
+function renderWx(s){
+  const host=$("#wx");host.textContent="";
+  if(!s.wx||!s.wx.current){host.innerHTML='<p style="color:var(--fg-muted);font-size:13px">Sin datos de clima para esta estación.</p>';return;}
+  const c=s.wx.current,d=s.wx.daily;
+  const now=document.createElement("div");now.className="wx-now";
+  now.innerHTML=`${wIcon(c.weather_code)}
+    <div><div class="t">${Math.round(c.temperature_2m)}°</div>
+    <div class="d">${WDESC[c.weather_code]||"—"} · ${s.nm}</div>
+    <div class="wx-meta"><span>Humedad ${Math.round(c.relative_humidity_2m)}%</span><span>Viento ${Math.round(c.wind_speed_10m)} km/h</span><span>Lluvia ${(c.precipitation||0).toFixed(1)} mm</span></div></div>`;
+  host.appendChild(now);
+  const days=document.createElement("div");days.className="wx-days";
+  for(let i=0;i<(d.time?d.time.length:0)&&i<10;i++){const dd=parseD(d.time[i]);
+    const cell=document.createElement("div");cell.className="wxd";
+    cell.innerHTML=`<div class="dn">${i===0?"Hoy":DIAS[dd.getDay()]}</div>${wIcon(d.weather_code[i])}
+      <div class="mx">${Math.round(d.temperature_2m_max[i])}°</div><div class="mn">${Math.round(d.temperature_2m_min[i])}°</div>
+      <div class="pp">${d.precipitation_probability_max?.[i]!=null?d.precipitation_probability_max[i]+"%":(d.precipitation_sum[i]||0).toFixed(0)+"mm"}</div>`;
+    days.appendChild(cell);}
+  host.appendChild(days);
+  // referencia oficial dentro del detalle, si existe
+  if(s.oficial){const o=s.oficial;const box=document.createElement("div");box.className="ref-box";
+    box.innerHTML=`<h4>Altura hidrométrica oficial</h4>
+      <div class="ref-row"><span>Último dato (${fmtD(o.fecha)})</span><b>${o.nivel.toFixed(2)} m</b></div>
+      ${o.alerta?`<div class="ref-row"><span>Alerta</span><b>${o.alerta.toFixed(2)} m</b></div>`:""}
+      ${o.evac?`<div class="ref-row"><span>Evacuación</span><b>${o.evac.toFixed(2)} m</b></div>`:""}
+      <div class="ref-row" style="color:var(--fg-faint)"><span>${o.src}</span><span>caudal arriba = modelo GloFAS</span></div>`;
+    host.appendChild(box);}
+  else{const p=document.createElement("p");p.style.cssText="font-size:11.5px;color:var(--fg-faint);margin:12px 2px 0;line-height:1.45";
+    p.innerHTML='Altura en metros de esta estación en <a href="https://www.ina.gob.ar/alerta/" target="_blank" rel="noopener">INA · Alerta Hidrológico</a>. El caudal mostrado arriba proviene del modelo GloFAS.';host.appendChild(p);}
+}
+
+/* =====================  MODO / AVISOS  ===================== */
+function renderMode(){
+  const dot=$("#mode"),txt=$("#modeTxt"),nt=$("#notice"),ntx=$("#noticeTxt");
+  if(state.mode==="live"){
+    dot.className="live-dot on";txt.textContent="Datos en vivo";
+    nt.className="notice live";nt.hidden=false;
+    ntx.innerHTML="<b>Conectado en tiempo real.</b> Caudal del modelo GloFAS y clima vía Open-Meteo. La proyección a febrero–marzo 2027 usa el pronóstico del modelo (hasta ~7 meses) con su banda de incertidumbre.";
+  }else{
+    dot.className="live-dot demo";txt.textContent="Escenario demo";
+    nt.className="notice";nt.hidden=false;
+    ntx.innerHTML="<b>Estás viendo un escenario de demostración</b> (no son mediciones reales). La vista previa de claude.ai bloquea las conexiones en vivo por seguridad. Para datos en <b>tiempo real</b>, descargá el archivo y abrilo en tu navegador: ahí la app consulta Open-Meteo directamente. Las <b>alturas oficiales</b> y el contexto de El Niño sí son datos reales citados.";
+  }
+  $("#disclaimer").innerHTML=(state.mode==="live"
+    ?"Caudal: modelo global GloFAS (Copernicus) vía Open-Meteo — estimación de modelo, no medición en el cauce. "
+    :"Los caudales y la animación son un escenario ilustrativo mientras no hay conexión en vivo. ")+
+    "Las alturas en metros son el último dato oficial conocido de INA/Prefectura (fechado). Esta herramienta es informativa y no reemplaza los avisos oficiales de INA, SMN y Prefectura Naval Argentina.";
+}
+
+/* =====================  TEMA  ===================== */
+function applyTheme(t){const r=document.documentElement;
+  if(t==="dark"||t==="light")r.setAttribute("data-theme",t);else r.removeAttribute("data-theme");
+  try{localStorage.setItem("tema-rios",t||"");}catch(e){}}
+function initTheme(){let t="";try{t=localStorage.getItem("tema-rios")||"";}catch(e){}if(t)applyTheme(t);
+  $("#theme").addEventListener("click",()=>{const cur=document.documentElement.getAttribute("data-theme");
+    const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme: dark)").matches;applyTheme(dark?"light":"dark");});}
+
+/* =====================  ARRANQUE  ===================== */
+function renderAll(){
+  renderMode();renderKPIs();renderOfficial();buildMap();setupTimeline();drawSelLabel();
+  renderProjection();renderStations();renderDetail();
+}
+function boot(){
+  initTheme();
+  // 1) Pintar de inmediato un escenario (frame completo) …
+  demo();renderAll();
+  $("#mapOverlay").classList.remove("show");
+  $("#modeTxt").textContent="Conectando…";$("#mode").className="live-dot";
+  // 2) …y en paralelo intentar datos en vivo; si llegan, reemplazar.
+  tryLive();
+  // controles
+  $("#play").addEventListener("click",()=>state.playing?stop():play());
+  $("#refresh").addEventListener("click",()=>{stop();$("#mapOverlay").classList.add("show");tryLive(true);});
+  document.querySelectorAll(".river-toggle button").forEach(b=>b.addEventListener("click",()=>{
+    state.river=b.dataset.rv;document.querySelectorAll(".river-toggle button").forEach(x=>x.setAttribute("aria-pressed",x===b));applyRiverFilter();}));
+}
+function tryLive(force){
+  loadLive().then(()=>{
+    state.idx=state.todayIdx;renderAll();$("#mapOverlay").classList.remove("show");
+  }).catch(()=>{
+    if(force){demo();renderAll();}
+    $("#mapOverlay").classList.remove("show");
+    $("#modeTxt").textContent="Escenario demo";$("#mode").className="live-dot demo";
+  });
+}
+if(document.readyState!=="loading")boot();else document.addEventListener("DOMContentLoaded",boot);
+</script>
+</body>
+</html>
